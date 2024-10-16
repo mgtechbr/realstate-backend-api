@@ -8,113 +8,115 @@ use Illuminate\Support\Facades\Storage;
 
 class PropertyController extends Controller
 {
-    public function index()
+	public function index()
 	{
 		$properties = Property::with('images')->get()->map(function($property) {
-			$property->image_url = $property->image ? Storage::url($property->image) : null;
-			$property->additional_images = $property->images->map(function($img) {
-				return Storage::url($img->image_path);
-			});
+			$property->image_url = $property->image && is_object($property->image) 
+				? Storage::url($property->image->path) 
+				: null;
+
+				$property->additional_images = $property->images instanceof \Illuminate\Database\Eloquent\Collection 
+				? $property->images->map(function($img) {
+					return url("storage/{$img->image_path}");
+				})->toArray() 
+				: [];
+	
 			return $property;
+
 		});
 
 		return response()->json($properties);
 	}
 
-    public function show($id)
-	{
-		$property = Property::with('images')->findOrFail($id);
-		$imageUrl = $property->image ? Storage::url($property->image) : null;
-		$additionalImages = $property->images->map(function($img) {
-			return Storage::url($img->image_path);
-		});
 
-		return response()->json([
-			'property' => $property,
-			'image_url' => $imageUrl,
-			'additional_images' => $additionalImages,
-		]);
-	}
+    public function show($id)
+    {
+        $property = Property::with('images')->findOrFail($id);
+
+        $property->image_url = $property->image ? Storage::url('images/' . $property->image) : null;
+
+        $property->additional_images = $property->images->map(function($img) use ($property) {
+            return Storage::url("images/{$property->id}/{$img->image_path}");
+        })->toArray();
+
+        return response()->json($property);
+    }
 
     public function store(Request $request)
-	{
-		$this->validateProperty($request);
+    {
+        $this->validateProperty($request);
+        $property = Property::create($request->except('image'));
+        $imageUrl = null;
 
-		$property = Property::create($request->except('image'));
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('images', 'public');
+            $property->update(['image' => $imagePath]);
+            $imageUrl = Storage::url($imagePath);
+        }
 
-		$imageUrl = null;
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $image) {
+                $imagePath = $image->store('images/' . $property->id, 'public');
+                $property->images()->create(['image_path' => $imagePath]);
+            }
+        }
 
-		if ($request->hasFile('image')) {
-			$imagePath = $request->file('image')->store('images', 'public');
-			$property->update(['image' => $imagePath]);
-			$imageUrl = Storage::url($imagePath);
-		}
+        return response()->json([
+			"message" => "Property created",			
+        ], 201);
+    }
 
-		if ($request->hasFile('images')) {
-			foreach ($request->file('images') as $image) {
-				$imagePath = $image->store('images/' . $property->id, 'public');
-				$property->images()->create(['image_path' => $imagePath]);
-			}
-		}
+    public function update(Request $request, $id)
+    {
+        $property = Property::findOrFail($id);
+        $this->validateProperty($request);
+        $imageUrl = null;
 
-		return response()->json([
-			'property' => $property,
-			'image_url' => $imageUrl,
-		], 201);
-	}
+        if ($request->hasFile('image')) {
+            if ($property->image) {
+                Storage::disk('public')->delete($property->image);
+            }
+            $imagePath = $request->file('image')->store('images', 'public');
+            $property->update(['image' => $imagePath]);
+        }
 
-	public function update(Request $request, $id)
-	{
-		$property = Property::findOrFail($id);
-		$this->validateProperty($request);
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $image) {
+                $imagePath = $image->store('images/' . $property->id, 'public');
+                $property->images()->create(['image_path' => $imagePath]);
+            }
+        }
 
-		$imageUrl = null;
+        $property->update($request->except('image', 'images'));
 
-		if ($request->hasFile('image')) {
-			if ($property->image) {
-				Storage::disk('public')->delete($property->image);
-			}
-			$imagePath = $request->file('image')->store('images', 'public');
-			$property->update(['image' => $imagePath]);
-		}
+        return response()->json([
+            'message' => 'Property updated',
+            'property' => $property,
+            'image_url' => $imageUrl,
+        ]);
+    }
 
-		if ($request->hasFile('images')) {
-			foreach ($request->file('images') as $image) {
-				$imagePath = $image->store('images/' . $property->id, 'public');
-				$property->images()->create(['image_path' => $imagePath]);
-			}
-		}
+    public function destroy($id)
+    {
+        $property = Property::findOrFail($id);
 
-		$property->update($request->except('image', 'images'));
+        if ($property->image) {
+            Storage::disk('public')->delete($property->image);
+        }
 
-		return response()->json([
-			'message' => 'Property updated',
-			'property' => $property,
-			'image_url' => $imageUrl,
-		]);
-	}
+        foreach ($property->images as $img) {
+            Storage::disk('public')->delete($img->image_path);
+            $img->delete();
+        }
 
-	public function destroy($id)
-	{
-		$property = Property::findOrFail($id);
+        $property->delete();
 
-		if ($property->image) {
-			Storage::disk('public')->delete($property->image);
-		}
+        return response()->json(null, 204);
+    }
 
-		// Delete additional images
-		foreach ($property->images as $img) {
-			Storage::disk('public')->delete($img->image_path);
-		}
-
-		$property->delete();
-
-		return response()->json(null, 204);
-	}
-
-
-	public function validateProperty($property){
-		$property->validate([
+    public function validateProperty($request)
+    {
+        $request->validate([
             'name' => 'required|string|max:255',
             'location' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
@@ -129,6 +131,9 @@ class PropertyController extends Controller
             'state_id' => 'required|integer|exists:states,id',
             'district_id' => 'required|integer|exists:districts,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+			'images' => 'nullable|array',
+			'images.*' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+
         ]);
-	}
+    }
 }

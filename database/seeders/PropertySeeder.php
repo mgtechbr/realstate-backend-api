@@ -12,57 +12,8 @@ class PropertySeeder extends Seeder
     {
         $faker = Faker::create();
 
-        $properties = [
-            [
-                'name' => 'Casa na Praia',
-                'location' => 'Praia do Forte, Bahia',
-                'price' => 500000.00,
-                'description' => 'Uma linda casa de veraneio perto do mar.',
-                'bathroom' => 2,
-                'bedroom' => 3,
-                'area' => 150.00,
-                'type' => 'casa',
-                'city_id' => 1,
-                'state_id' => 1,
-                'district_id' => 1,
-                'image' => 'images/casa_praia.jpg',
-            ],
-            [
-                'name' => 'Apartamento na Cidade',
-                'location' => 'Centro, São Paulo',
-                'price' => 350000.00,
-                'description' => 'Apartamento moderno em uma localização privilegiada.',
-                'bathroom' => 1,
-                'bedroom' => 2,
-                'area' => 80.00,
-                'type' => 'apartamento',
-                'city_id' => 1,
-                'state_id' => 1,
-                'district_id' => 1,
-                'image' => 'images/apartamento_cidade.jpg',
-            ],
-            [
-                'name' => 'Chácara no Interior',
-                'location' => 'Campinas, São Paulo',
-                'price' => 700000.00,
-                'description' => 'Chácara com muito espaço e tranquilidade.',
-                'bathroom' => 3,
-                'bedroom' => 4,
-                'area' => 300.00,
-                'type' => 'casa',
-                'city_id' => 1,
-                'state_id' => 1,
-                'district_id' => 1,
-                'image' => 'images/chacara_interior.jpg',
-            ],
-        ];
-
-        foreach ($properties as $property) {
-            Property::create($property);
-        }
-
-        for ($i = 0; $i < 10; $i++) {
-            Property::create([
+        for ($i = 0; $i < 3; $i++) {
+            $property = Property::create([
                 'name' => $faker->sentence(3),
                 'location' => $faker->address,
                 'price' => $faker->randomFloat(2, 100000, 1000000),
@@ -74,8 +25,15 @@ class PropertySeeder extends Seeder
                 'city_id' => 1,
                 'state_id' => 1,
                 'district_id' => 1,
-                'image' => 'images/default_image.jpg',
+                'image' => 'default_image.jpg',
             ]);
-        }
+        };
+
+		for ($j = 0; $j < rand(1, 5); $j++) {
+			$property->images()->create([
+				'image_path' => 'additional_image_' . $j . '.jpg',
+			]);
+		}
+		
     }
 }
