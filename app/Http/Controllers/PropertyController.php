@@ -66,37 +66,39 @@ class PropertyController extends Controller
     }
 
     public function update(Request $request, $id)
-    {
-        $property = Property::findOrFail($id);
-        $this->validateUpdateProperty($request);
-    
-        if ($request->hasFile('image')) {
-            if ($property->image) {
-                Storage::disk('public')->delete($property->image);
-            }
-            $imagePath = $request->file('image')->store('images/' . $property->id . '/principal', 'public');
-            $property->update(['image' => $imagePath]);
-        }
-    
-        if ($request->hasFile('images')) {
-            foreach ($property->images as $img) {
-                Storage::disk('public')->delete($img->image_path);
-                $img->delete();
-            }
-    
-            foreach ($request->file('images') as $image) {
-                $imagePath = $image->store('images/' . $property->id, 'public');
-                $property->images()->create(['image_path' => $imagePath]);
-            }
-        }
-    
-        $property->update($request->except('image', 'images'));
-    
-        return response()->json([
-            'message' => 'Property updated',
-            'property' => $property
-        ]);
-    }
+	{
+		$property = Property::with('images')->findOrFail($id);
+		$this->validateUpdateProperty($request);
+
+		dd($request->all()); // Verifica os dados da requisição
+
+		if ($request->hasFile('image')) {
+			if ($property->image) {
+				Storage::disk('public')->delete($property->image);
+			}
+			$imagePath = $request->file('image')->store('images/' . $property->id . '/principal', 'public');
+			$property->image = $imagePath;
+		}
+
+		if ($request->hasFile('images')) {
+			foreach ($property->images as $img) {
+				Storage::disk('public')->delete($img->image_path);
+				$img->delete();
+			}
+
+			foreach ($request->file('images') as $image) {
+				$imagePath = $image->store('images/' . $property->id, 'public');
+				$property->images()->create(['image_path' => $imagePath]);
+			}
+		}
+
+		$property->update($request->except('image', 'images'));
+
+		return response()->json([
+			'message' => 'Property updated',
+			'property' => $property->load('images')
+		]);
+	}
     
 
     public function destroy($id)
