@@ -70,8 +70,6 @@ class PropertyController extends Controller
 		$property = Property::with('images')->findOrFail($id);
 		$this->validateUpdateProperty($request);
 
-		dd($request->all()); // Verifica os dados da requisição
-
 		if ($request->hasFile('image')) {
 			if ($property->image) {
 				Storage::disk('public')->delete($property->image);
